@@ -1,0 +1,6 @@
+{
+  "name": "IskoChain",
+  "description": "Conditional scholarship disbursement on the Stellar blockchain for Quezon City Youth Development Office (QCYDO) scholars.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
