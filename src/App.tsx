@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   connectWallet, getBalance, HORIZON_URL, MOCK_ESCROW_ADDRESS, 
-  NETWORK, NETWORK_PASSPHRASE 
+  NETWORK, NETWORK_PASSPHRASE, queryContract, parseEnum, CONTRACT_ID 
 } from "./stellar";
 import Navbar from "./components/Navbar";
 import AdminView from "./components/AdminView";
@@ -25,7 +25,7 @@ export default function App() {
   // Core Demo States
   const [escrowStatus, setEscrowStatus] = useState<"Pending" | "Funded" | "ProofSubmitted" | "Released" | "Refunded">("Pending");
   const [scholarshipAmount, setScholarshipAmount] = useState<number>(175);
-  const [studentAddress, setStudentAddress] = useState<string>("GAE2GDREOKEDNKKJ7V7ZLQHVCSCYJ3PDWFRFOCMRE6KUMXGUP6YUKTTH");
+  const [studentAddress, setStudentAddress] = useState<string>("GDNS7RJXWL2L2NTZ6TESPH6D4SPT3VAONOUGADO5BIC3QDOEHLJG2FNR");
   const [scholarName, setScholarName] = useState<string>("Maria Santos");
   const [schoolName, setSchoolName] = useState<string>("Quezon City University");
 
@@ -68,6 +68,36 @@ export default function App() {
       console.warn("Could not query live Freighter balances:", err);
     }
   };
+
+  const syncWithContractState = async () => {
+    try {
+      const rawStatus = await queryContract(CONTRACT_ID, "get_status");
+      const statusStr = parseEnum(rawStatus);
+      if (["Pending", "Funded", "ProofSubmitted", "Released", "Refunded"].includes(statusStr)) {
+        setEscrowStatus(statusStr as any);
+      }
+      
+      const rawAmount = await queryContract(CONTRACT_ID, "get_amount");
+      if (rawAmount !== null && rawAmount !== undefined) {
+        setScholarshipAmount(Number(BigInt(rawAmount)) / 10000000);
+      }
+      
+      const rawStudent = await queryContract(CONTRACT_ID, "get_student");
+      if (rawStudent) {
+        setStudentAddress(rawStudent);
+      }
+    } catch (err) {
+      console.warn("Contract not initialized yet or not found on-chain. Keeping default mock values.", err);
+    }
+  };
+
+  useEffect(() => {
+    syncWithContractState();
+    const interval = setInterval(() => {
+      syncWithContractState();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (walletAddress) {
@@ -231,6 +261,7 @@ export default function App() {
               schoolName={schoolName}
               setSchoolName={setSchoolName}
               addToast={addToast}
+              syncWithContractState={syncWithContractState}
             />
           )}
 
@@ -247,6 +278,7 @@ export default function App() {
               xlmBalance={xlmBalance}
               refreshBalances={fetchBalancesUpdate}
               addToast={addToast}
+              syncWithContractState={syncWithContractState}
             />
           )}
 
@@ -261,6 +293,7 @@ export default function App() {
               xlmBalance={xlmBalance}
               onConnectWallet={handleConnectWallet}
               addToast={addToast}
+              syncWithContractState={syncWithContractState}
             />
           )}
 
@@ -271,6 +304,7 @@ export default function App() {
               scholarName={scholarName}
               studentAddress={studentAddress}
               addToast={addToast}
+              syncWithContractState={syncWithContractState}
             />
           )}
         </div>
