@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Shield, Coins, Calendar, GraduationCap, Building, AlertTriangle, CheckCircle2, ArrowRight, Save } from "lucide-react";
+import { initializeContract, releaseContract } from "../stellar";
 
 interface AdminViewProps {
   walletAddress: string | null;
@@ -14,6 +15,7 @@ interface AdminViewProps {
   schoolName: string;
   setSchoolName: (name: string) => void;
   addToast: (msg: string, type: "success" | "error" | "info") => void;
+  syncWithContractState: () => Promise<void>;
 }
 
 export default function AdminView({
@@ -29,6 +31,7 @@ export default function AdminView({
   schoolName,
   setSchoolName,
   addToast,
+  syncWithContractState,
 }: AdminViewProps) {
   // Local form inputs
   const [localStudentAddr, setLocalStudentAddr] = useState(studentAddress);
@@ -44,12 +47,12 @@ export default function AdminView({
   const loadDemoData = () => {
     setLocalScholarName("Maria Santos");
     setLocalSchool("Quezon City University");
-    setLocalStudentAddr("GAE2GDREOKEDNKKJ7V7ZLQHVCSCYJ3PDWFRFOCMRE6KUMXGUP6YUKTTH");
+    setLocalStudentAddr("GDNS7RJXWL2L2NTZ6TESPH6D4SPT3VAONOUGADO5BIC3QDOEHLJG2FNR");
     setLocalAmount("175");
     addToast("Loaded Maria Santos demo profile", "info");
   };
 
-  const handleInitialize = (e: React.FormEvent) => {
+  const handleInitialize = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!walletAddress) {
       addToast("Please connect your Freighter wallet to perform administrative actions.", "error");
@@ -67,19 +70,24 @@ export default function AdminView({
     setIsInitializing(true);
     addToast("Initializing Soroban Escrow Contract on Stellar Testnet...", "info");
 
-    // Artificial wait of 1.5 seconds to simulate real blockchain transaction
-    setTimeout(() => {
+    try {
+      await initializeContract(walletAddress, localStudentAddr, parseFloat(localAmount));
       setStudentAddress(localStudentAddr);
       setScholarshipAmount(parseFloat(localAmount));
       setScholarName(localScholarName || "Maria Santos");
       setSchoolName(localSchool || "Quezon City University");
       setEscrowStatus("Pending");
-      setIsInitializing(false);
       addToast("✓ Stellar smart contract initialized! Awaiting Sponsor funding.", "success");
-    }, 1600);
+      await syncWithContractState();
+    } catch (err: any) {
+      console.error(err);
+      addToast(err?.message || "Failed to initialize contract on-chain.", "error");
+    } finally {
+      setIsInitializing(false);
+    }
   };
 
-  const handleReleaseFunds = () => {
+  const handleReleaseFunds = async () => {
     if (!walletAddress) {
       addToast("Please connect your administrative wallet.", "error");
       return;
@@ -87,11 +95,17 @@ export default function AdminView({
     setIsReleasing(true);
     addToast("Broadcasting cryptographic release signal to Stellar blockchain...", "info");
 
-    setTimeout(() => {
+    try {
+      await releaseContract(walletAddress);
       setEscrowStatus("Released");
-      setIsReleasing(false);
       addToast("🎉 Funds unlocked! 175 USDC successfully disbursed directly to Student.", "success");
-    }, 1800);
+      await syncWithContractState();
+    } catch (err: any) {
+      console.error(err);
+      addToast(err?.message || "Failed to release funds on-chain.", "error");
+    } finally {
+      setIsReleasing(false);
+    }
   };
 
   return (

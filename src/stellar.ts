@@ -8,7 +8,7 @@ export const NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
 // USDC on Stellar Testnet
 export const USDC_ASSET_CODE = "USDC";
 export const USDC_ISSUER = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
-export const CONTRACT_ID = "YOUR_CONTRACT_ID_HERE";
+export const CONTRACT_ID = "CBPAH3XKSZNFJUP3TSEE7NGDLVXMJFSWSTLU7KFLGDKXYVQDQX42P5H4";
 
 // Escrow wallet address for mock/simulation backing (can be any testnet account)
 export const MOCK_ESCROW_ADDRESS = "GBQLX6K3LHY3MXR7G7SCDWS43DQXAQA6NDD2G77XCSYEXYJ7PZPHXNCS";
@@ -20,12 +20,22 @@ const api: any = freighterApi;
 
 // helper to safely extract getPublicKey function with double fallback
 const getFreighterPublicKey = async (): Promise<string> => {
+  if (api && typeof api.requestAccess === "function") {
+    try {
+      const res = await api.requestAccess();
+      if (res && res.address) return res.address;
+      if (typeof res === "string") return res;
+    } catch (e) {
+      console.warn("requestAccess failed, trying fallback:", e);
+    }
+  }
   if (api && typeof api.getPublicKey === "function") {
     return await api.getPublicKey();
   }
   if (api && typeof api.getAddress === "function") {
     const res = await api.getAddress();
-    return res.address;
+    if (res && res.address) return res.address;
+    if (typeof res === "string") return res;
   }
   throw new Error("getPublicKey method not found on Freighter API");
 };
@@ -220,4 +230,159 @@ export async function fundWithFriendbot(publicKey: string): Promise<boolean> {
     console.error("Error funding account:", error);
     return false;
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SOROBAN SMART CONTRACT HELPER FUNCTIONS
+// ─────────────────────────────────────────────────────────────
+
+export function hexToBytes(hex: string): Uint8Array {
+  const arr = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < arr.length; i++) {
+    arr[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+  }
+  return arr;
+}
+
+export function parseEnum(val: any): string {
+  if (typeof val === "string") return val;
+  if (val && typeof val === "object") {
+    const keys = Object.keys(val);
+    if (keys.length > 0) return keys[0];
+  }
+  return String(val);
+}
+
+export const SOROBAN_RPC_URL = "https://soroban-testnet.stellar.org";
+const rpcServer = new StellarSdk.rpc.Server(SOROBAN_RPC_URL);
+
+export async function queryContract(
+  contractId: string,
+  functionName: string,
+  args: any[] = []
+): Promise<any> {
+  try {
+    const contract = new StellarSdk.Contract(contractId);
+    const tempSourceAddress = "GBQLX6K3LHY3MXR7G7SCDWS43DQXAQA6NDD2G77XCSYEXYJ7PZPHXNCS";
+    const sourceAccount = new StellarSdk.Account(tempSourceAddress, "0");
+    
+    const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
+      fee: StellarSdk.BASE_FEE,
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(contract.call(functionName, ...args))
+      .setTimeout(30)
+      .build();
+
+    const simulation = await rpcServer.simulateTransaction(tx);
+    if (StellarSdk.rpc.Api.isSimulationSuccess(simulation)) {
+      if (simulation.result && simulation.result.retval) {
+        return StellarSdk.scValToNative(simulation.result.retval);
+      }
+      return null;
+    } else {
+      console.error("Simulation failed:", simulation);
+      throw new Error("SIMULATION_FAILED");
+    }
+  } catch (error) {
+    console.error(`Error querying contract ${functionName}:`, error);
+    throw error;
+  }
+}
+
+export async function invokeContractFunction(
+  userAddress: string,
+  functionName: string,
+  args: any[]
+): Promise<string> {
+  const account = await rpcServer.getAccount(userAddress);
+  const contract = new StellarSdk.Contract(CONTRACT_ID);
+  
+  const tx = new StellarSdk.TransactionBuilder(account, {
+    fee: StellarSdk.BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(contract.call(functionName, ...args))
+    .setTimeout(30)
+    .build();
+
+  // Prepare transaction (simulates and adds footprint/resources/fee)
+  const preparedTx = await rpcServer.prepareTransaction(tx);
+
+  // Request Freighter signature
+  const signedResult = await signFreighterTransaction(preparedTx.toXDR(), {
+    networkPassphrase: NETWORK_PASSPHRASE,
+  });
+  const signedTxXdr = signedResult.signedTxXdr || signedResult;
+
+  // Submit transaction
+  const response = await rpcServer.sendTransaction(
+    StellarSdk.TransactionBuilder.fromXDR(signedTxXdr, NETWORK_PASSPHRASE)
+  );
+
+  if (response.status === "PENDING") {
+    // Poll for status
+    const pollResult = await rpcServer.pollTransaction(response.hash, {
+      sleepStrategy: (attempt) => 1000,
+      attempts: 12,
+    });
+    if (pollResult.status === StellarSdk.rpc.Api.GetTransactionStatus.SUCCESS) {
+      return response.hash;
+    } else {
+      throw new Error(`Transaction failed with status: ${pollResult.status}`);
+    }
+  } else {
+    throw new Error(`Transaction submission failed: ${response.status}`);
+  }
+}
+
+export async function initializeContract(
+  adminAddress: string,
+  studentAddress: string,
+  amount: number
+): Promise<string> {
+  const tokenAddress = new StellarSdk.Asset(USDC_ASSET_CODE, USDC_ISSUER).contractId(NETWORK_PASSPHRASE);
+  const amountStroops = BigInt(Math.round(amount * 10000000));
+  
+  const args = [
+    StellarSdk.nativeToScVal(adminAddress, { type: "address" }),
+    StellarSdk.nativeToScVal(studentAddress, { type: "address" }),
+    StellarSdk.nativeToScVal(tokenAddress, { type: "address" }),
+    StellarSdk.nativeToScVal(amountStroops, { type: "i128" }),
+  ];
+  
+  return await invokeContractFunction(adminAddress, "initialize", args);
+}
+
+export async function depositContract(sponsorAddress: string): Promise<string> {
+  const args = [
+    StellarSdk.nativeToScVal(sponsorAddress, { type: "address" }),
+  ];
+  return await invokeContractFunction(sponsorAddress, "deposit", args);
+}
+
+export async function submitProofContract(
+  studentAddress: string,
+  proofHashHex: string
+): Promise<string> {
+  const bytes = hexToBytes(proofHashHex);
+  const args = [
+    StellarSdk.nativeToScVal(studentAddress, { type: "address" }),
+    StellarSdk.nativeToScVal(bytes, { type: "bytes" }),
+  ];
+  return await invokeContractFunction(studentAddress, "submit_proof", args);
+}
+
+export async function releaseContract(adminAddress: string): Promise<string> {
+  const args = [
+    StellarSdk.nativeToScVal(adminAddress, { type: "address" }),
+  ];
+  return await invokeContractFunction(adminAddress, "release", args);
+}
+
+export async function refundContract(adminAddress: string): Promise<string> {
+  const args = [
+    StellarSdk.nativeToScVal(adminAddress, { type: "address" }),
+  ];
+  return await invokeContractFunction(adminAddress, "refund", args);
 }

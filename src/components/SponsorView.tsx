@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Coins, User, Wallet, CheckCircle, ExternalLink, ArrowUpRight, HelpCircle, AlertTriangle } from "lucide-react";
-import { sendUSDC, addUSDCTrustline, fundWithFriendbot, MOCK_ESCROW_ADDRESS } from "../stellar";
+import { sendUSDC, addUSDCTrustline, fundWithFriendbot, MOCK_ESCROW_ADDRESS, depositContract } from "../stellar";
 
 interface SponsorViewProps {
   walletAddress: string | null;
@@ -14,6 +14,7 @@ interface SponsorViewProps {
   xlmBalance: string;
   refreshBalances: () => void;
   addToast: (msg: string, type: "success" | "error" | "info") => void;
+  syncWithContractState: () => Promise<void>;
 }
 
 export default function SponsorView({
@@ -28,6 +29,7 @@ export default function SponsorView({
   xlmBalance,
   refreshBalances,
   addToast,
+  syncWithContractState,
 }: SponsorViewProps) {
   const [isFunding, setIsFunding] = useState(false);
   const [isAddingTrustline, setIsAddingTrustline] = useState(false);
@@ -88,14 +90,14 @@ export default function SponsorView({
     addToast(`Broadcasting contract deposit of ${scholarshipAmount} USDC to Stellar Escrow Account...`, "info");
 
     try {
-      // Execute the real transfer to the mock/real collective testnet escrow address
-      // If the wallet does not have trustlines or funds, this throws and we handle specifically
-      const hash = await sendUSDC(walletAddress, MOCK_ESCROW_ADDRESS, scholarshipAmount);
+      // Execute real deposit on the smart contract
+      const hash = await depositContract(walletAddress);
       
       setLastTxHash(hash);
       setEscrowStatus("Funded");
       addToast("🎉 Funds successfully deposited and dynamically locked in Soroban!", "success");
       refreshBalances();
+      await syncWithContractState();
     } catch (err: any) {
       console.error(err);
       if (err.message === "NO_USDC_TRUSTLINE") {
@@ -105,13 +107,13 @@ export default function SponsorView({
         setInsufficientError(true);
         addToast("Insufficient USDC balance to complete the scholarship lock-up.", "error");
       } else {
-        // Since testnet can sometimes fail or users might want immediate demo bypass, 
-        // let's give them a mock bypass button or simulate it if they confirm they want the demo anyway.
+        // Fallback bypass for demo
         addToast("Stellar transmission failed. Simulating local escrow state for demo purposes.", "info");
-        setTimeout(() => {
+        setTimeout(async () => {
           setEscrowStatus("Funded");
           setLastTxHash("d4b1a43ffb4fa11a43a89e9f90f20ca11466def5f2081fbbab100bc00daeee44");
           addToast("✓ Mock Escrow Funded! Moving flow forward.", "success");
+          await syncWithContractState();
         }, 1500);
       }
     } finally {

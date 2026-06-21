@@ -3,7 +3,7 @@ import {
   Globe, Clock, Search, ExternalLink, ArrowDownLeft, ShieldCheck, 
   HelpCircle, RefreshCw, Layers 
 } from "lucide-react";
-import { getTransactionHistory, MOCK_ESCROW_ADDRESS } from "../stellar";
+import { getTransactionHistory, MOCK_ESCROW_ADDRESS, CONTRACT_ID } from "../stellar";
 
 interface TransparencyFeedProps {
   escrowStatus: "Pending" | "Funded" | "ProofSubmitted" | "Released" | "Refunded";
@@ -11,6 +11,7 @@ interface TransparencyFeedProps {
   scholarName: string;
   studentAddress: string;
   addToast: (msg: string, type: "success" | "error" | "info") => void;
+  syncWithContractState?: () => Promise<void>;
 }
 
 export default function TransparencyFeed({
@@ -19,6 +20,7 @@ export default function TransparencyFeed({
   scholarName,
   studentAddress,
   addToast,
+  syncWithContractState,
 }: TransparencyFeedProps) {
   const [liveTxs, setLiveTxs] = useState<any[]>([]);
   const [loadingTxs, setLoadingTxs] = useState(false);
@@ -28,10 +30,14 @@ export default function TransparencyFeed({
   const fetchLedgerActivities = async () => {
     setLoadingTxs(true);
     try {
-      // Fetch history for the collective demo escrow address
-      const history = await getTransactionHistory(MOCK_ESCROW_ADDRESS);
-      setLiveTxs(history);
+      // Fetch history for the actual contract address and mock address to show both
+      const history = await getTransactionHistory(CONTRACT_ID);
+      const fallbackHistory = await getTransactionHistory(MOCK_ESCROW_ADDRESS);
+      setLiveTxs([...history, ...fallbackHistory].slice(0, 10));
       setLastUpdated(new Date());
+      if (syncWithContractState) {
+        await syncWithContractState();
+      }
     } catch (err) {
       console.warn("Could not query live testnet activities, falling back to mock stream.", err);
     } finally {

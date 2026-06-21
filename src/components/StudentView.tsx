@@ -3,7 +3,7 @@ import {
   FileText, Upload, CheckCircle2, ChevronRight, Loader2, Sparkles, 
   ExternalLink, Wallet, HelpCircle, FileUp 
 } from "lucide-react";
-import { hashFile } from "../stellar";
+import { hashFile, submitProofContract } from "../stellar";
 
 interface StudentViewProps {
   walletAddress: string | null;
@@ -16,6 +16,7 @@ interface StudentViewProps {
   xlmBalance: string;
   onConnectWallet: () => void;
   addToast: (msg: string, type: "success" | "error" | "info") => void;
+  syncWithContractState: () => Promise<void>;
 }
 
 export default function StudentView({
@@ -28,6 +29,7 @@ export default function StudentView({
   xlmBalance,
   onConnectWallet,
   addToast,
+  syncWithContractState,
 }: StudentViewProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isHashing, setIsHashing] = useState(false);
@@ -92,19 +94,35 @@ export default function StudentView({
     }, 1500);
   };
 
-  const handleSubmitProof = () => {
+  const handleSubmitProof = async () => {
     if (!walletAddress) {
       addToast("Please connect your Freighter wallet.", "error");
       return;
     }
+    if (!fileHash) {
+      addToast("No document hash available.", "error");
+      return;
+    }
+
     setIsSubmittingProof(true);
     addToast("Submitting proof state to Stellar Testnet...", "info");
 
-    setTimeout(() => {
+    try {
+      await submitProofContract(walletAddress, fileHash);
       setEscrowStatus("ProofSubmitted");
-      setIsSubmittingProof(false);
       addToast("✓ Proof submitted! QCYDO is notified for fund release.", "success");
-    }, 1800);
+      await syncWithContractState();
+    } catch (err: any) {
+      console.error(err);
+      addToast("Stellar transmission failed. Simulating local escrow state for demo purposes.", "info");
+      setTimeout(async () => {
+        setEscrowStatus("ProofSubmitted");
+        addToast("✓ Mock Proof submitted! Moving flow forward.", "success");
+        await syncWithContractState();
+      }, 1500);
+    } finally {
+      setIsSubmittingProof(false);
+    }
   };
 
   // Convert status to stepper state
