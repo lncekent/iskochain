@@ -6,7 +6,7 @@ import {
 import { getTransactionHistory, MOCK_ESCROW_ADDRESS, CONTRACT_ID } from "../stellar";
 
 interface TransparencyFeedProps {
-  escrowStatus: "Pending" | "Funded" | "ProofSubmitted" | "Released" | "Refunded";
+  escrowStatus: "Uninitialized" | "Pending" | "Funded" | "ProofSubmitted" | "Released" | "Refunded";
   scholarshipAmount: number;
   scholarName: string;
   studentAddress: string;
