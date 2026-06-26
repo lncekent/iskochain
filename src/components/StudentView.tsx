@@ -7,8 +7,8 @@ import { hashFile, submitProofContract } from "../stellar";
 
 interface StudentViewProps {
   walletAddress: string | null;
-  escrowStatus: "Pending" | "Funded" | "ProofSubmitted" | "Released" | "Refunded";
-  setEscrowStatus: (status: "Pending" | "Funded" | "ProofSubmitted" | "Released" | "Refunded") => void;
+  escrowStatus: "Uninitialized" | "Pending" | "Funded" | "ProofSubmitted" | "Released" | "Refunded";
+  setEscrowStatus: (status: "Uninitialized" | "Pending" | "Funded" | "ProofSubmitted" | "Released" | "Refunded") => void;
   scholarshipAmount: number;
   scholarName: string;
   className?: string;
@@ -225,6 +225,20 @@ export default function StudentView({
               >
                 Connect Wallet
               </button>
+            </div>
+          )}
+
+          {/* STEP 1.5: Uninitialized Setup Locking screen */}
+          {walletAddress && escrowStatus === "Uninitialized" && (
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-center space-y-4">
+              <span className="text-4xl select-none">⏳</span>
+              <h3 className="text-base font-bold text-slate-900">Awaiting Administrative Setup</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                Your scholarship contract is not yet active on the Stellar blockchain. Quezon City University (QCYDO) administrative staff need to register and initialize your scholarship parameters.
+              </p>
+              <div className="bg-slate-50 p-4 rounded-xl text-left border border-slate-200/60 max-w-sm mx-auto text-[11px] text-slate-600 leading-relaxed">
+                🌱 <b>Demo Shortcut:</b> Head over to the &quot;QCYDO Admin&quot; tab using the navigation menu and click **Initialize Escrow Contract** to register the scholarship program.
+              </div>
             </div>
           )}
 
