@@ -81,6 +81,10 @@ export default function AdminView({
       await syncWithContractState();
     } catch (err: any) {
       console.error(err);
+      if (err.message === "USER_DECLINED") {
+        addToast("Transaction rejected by user.", "error");
+        return;
+      }
       addToast("Stellar transmission failed. Simulating local escrow state for demo purposes.", "info");
       setTimeout(async () => {
         setStudentAddress(localStudentAddr);
@@ -111,6 +115,10 @@ export default function AdminView({
       await syncWithContractState();
     } catch (err: any) {
       console.error(err);
+      if (err.message === "USER_DECLINED") {
+        addToast("Transaction rejected by user.", "error");
+        return;
+      }
       addToast("Stellar transmission failed. Simulating local escrow state for demo purposes.", "info");
       setTimeout(async () => {
         setEscrowStatus("Released");
