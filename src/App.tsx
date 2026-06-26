@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { 
-  connectWallet, getBalance, HORIZON_URL, MOCK_ESCROW_ADDRESS, 
+  connectWallet, disconnectWallet, getBalance, HORIZON_URL, MOCK_ESCROW_ADDRESS, 
   NETWORK, NETWORK_PASSPHRASE, queryContract, parseEnum, CONTRACT_ID 
 } from "./stellar";
 import Navbar from "./components/Navbar";
@@ -117,12 +117,13 @@ export default function App() {
     try {
       const pubKey = await connectWallet();
       setWalletAddress(pubKey);
-      addToast("✓ Freighter Wallet connected successfully!", "success");
+      addToast("✓ Wallet connected successfully!", "success");
     } catch (err: any) {
       console.error(err);
-      if (err.message === "Freighter wallet not installed") {
-        setFreighterInstalled(false);
-        addToast("Freighter wallet extension not active or installed.", "error");
+      if (err.message === "CONNECTION_DISMISSED") {
+        addToast("Wallet connection selection dismissed.", "info");
+      } else if (err.message === "WALLET_NOT_INSTALLED") {
+        addToast("Selected wallet is not installed or active.", "error");
       } else {
         addToast("Wallet connection declined or locked.", "error");
       }
@@ -131,11 +132,16 @@ export default function App() {
     }
   };
 
-  const handleDisconnectWallet = () => {
+  const handleDisconnectWallet = async () => {
+    try {
+      await disconnectWallet();
+    } catch (err) {
+      console.warn("Error disconnecting wallet through kit:", err);
+    }
     setWalletAddress(null);
     setUsdcBalance("0.00000");
     setXlmBalance("0.00000");
-    addToast("Freighter Wallet disconnected safely.", "info");
+    addToast("Wallet disconnected safely.", "info");
   };
 
   return (
