@@ -3,7 +3,7 @@ import {
   Globe, Clock, Search, ExternalLink, ArrowDownLeft, ShieldCheck, 
   HelpCircle, RefreshCw, Layers 
 } from "lucide-react";
-import { getTransactionHistory, MOCK_ESCROW_ADDRESS, CONTRACT_ID } from "../stellar";
+import { getTransactionHistory, MOCK_ESCROW_ADDRESS, CONTRACT_ID, getContractEvents } from "../stellar";
 
 interface TransparencyFeedProps {
   escrowStatus: "Uninitialized" | "Pending" | "Funded" | "ProofSubmitted" | "Released" | "Refunded";
@@ -23,6 +23,7 @@ export default function TransparencyFeed({
   syncWithContractState,
 }: TransparencyFeedProps) {
   const [liveTxs, setLiveTxs] = useState<any[]>([]);
+  const [realEvents, setRealEvents] = useState<any[]>([]);
   const [loadingTxs, setLoadingTxs] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
@@ -30,6 +31,10 @@ export default function TransparencyFeed({
   const fetchLedgerActivities = async () => {
     setLoadingTxs(true);
     try {
+      // Fetch active contract events in real-time
+      const events = await getContractEvents();
+      setRealEvents(events);
+
       // Fetch history for the actual contract address and mock address to show both
       const history = await getTransactionHistory(CONTRACT_ID);
       const fallbackHistory = await getTransactionHistory(MOCK_ESCROW_ADDRESS);
@@ -59,6 +64,41 @@ export default function TransparencyFeed({
   // Combined stream: Merge simulated actions with real Stellar testnet transactions
   const getMergedStream = () => {
     const list: any[] = [];
+
+    // Map real-time RPC events to feed items
+    const parsedEvents = realEvents.map((evt, idx) => {
+      const topicStr = String(evt.topics[0] || "").toLowerCase();
+      let type = "STELLAR_TX";
+      let typeName = "Contract Event";
+      let scholar = scholarName;
+      let amount = `${scholarshipAmount} USDC`;
+      let address = studentAddress;
+
+      if (topicStr.includes("deposit")) {
+        type = "ESCROW_DEPOSIT";
+        typeName = "Escrow Deposit Locked";
+      } else if (topicStr.includes("submit_proof") || topicStr.includes("proof")) {
+        type = "PROOF_SUBMISSION";
+        typeName = "Crypto Proof Anchored";
+      } else if (topicStr.includes("release")) {
+        type = "DISBURSEMENT";
+        typeName = "Scholarship Disbursed";
+      }
+
+      return {
+        id: evt.id || `evt-${idx}`,
+        type,
+        typeName,
+        scholar,
+        amount,
+        address: address || MOCK_ESCROW_ADDRESS,
+        timestamp: `Ledger ${evt.ledger}`,
+        txHash: evt.id.split("-")[0] || "Event",
+        isReal: true,
+      };
+    });
+
+    list.push(...parsedEvents);
 
     // Inject active user states as simulated real-time transactions to ensure the UI updates dynamically for the hackathon
     if (escrowStatus === "Released") {
