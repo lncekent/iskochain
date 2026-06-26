@@ -8,10 +8,10 @@ export const NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
 // USDC on Stellar Testnet
 export const USDC_ASSET_CODE = "USDC";
 export const USDC_ISSUER = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
-export const CONTRACT_ID = "CBPAH3XKSZNFJUP3TSEE7NGDLVXMJFSWSTLU7KFLGDKXYVQDQX42P5H4";
+export const CONTRACT_ID = "CBTLVHKWFNFYSUTIFVCWIRH3PJOMMLAZ5N44IU5ZODZ2LBVBY3IXKHQ2";
 
 // Escrow wallet address for mock/simulation backing (can be any testnet account)
-export const MOCK_ESCROW_ADDRESS = "GBQLX6K3LHY3MXR7G7SCDWS43DQXAQA6NDD2G77XCSYEXYJ7PZPHXNCS";
+export const MOCK_ESCROW_ADDRESS = "GDNS7RJXWL2L2NTZ6TESPH6D4SPT3VAONOUGADO5BIC3QDOEHLJG2FNR";
 
 const server = new StellarSdk.Horizon.Server(HORIZON_URL);
 
@@ -164,6 +164,39 @@ export async function sendUSDC(fromKey: string, toKey: string, amount: number): 
   }
 }
 
+// 3.5. Send native XLM from one address to another (gas fee gifting)
+export async function sendXLM(fromKey: string, toKey: string, amount: number): Promise<string> {
+  try {
+    const account = await server.loadAccount(fromKey);
+    const tx = new StellarSdk.TransactionBuilder(account, {
+      fee: StellarSdk.BASE_FEE,
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(
+        StellarSdk.Operation.payment({
+          destination: toKey,
+          asset: StellarSdk.Asset.native(),
+          amount: amount.toFixed(7),
+        })
+      )
+      .setTimeout(60)
+      .build();
+
+    const resultResponse = await signFreighterTransaction(tx.toXDR(), {
+      networkPassphrase: NETWORK_PASSPHRASE,
+    });
+    const signedTxXdr = resultResponse.signedTxXdr || resultResponse;
+
+    const txToSubmit = StellarSdk.TransactionBuilder.fromXDR(signedTxXdr, NETWORK_PASSPHRASE);
+    const result = await server.submitTransaction(txToSubmit);
+    return result.hash;
+  } catch (err: any) {
+    console.error("Error sending XLM:", err);
+    throw new Error(err?.message || "XLM_TRANSFER_FAILED");
+  }
+}
+
+
 // 4. Generate SHA-256 hash from a File object (for proof hashing)
 export async function hashFile(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
@@ -175,6 +208,9 @@ export async function hashFile(file: File): Promise<string> {
 
 // 5. Fetch last 10 transactions for an address from Horizon API
 export async function getTransactionHistory(address: string): Promise<any[]> {
+  if (address && address.startsWith("C")) {
+    return [];
+  }
   try {
     const history = await server.transactions()
       .forAccount(address)
@@ -263,7 +299,7 @@ export async function queryContract(
 ): Promise<any> {
   try {
     const contract = new StellarSdk.Contract(contractId);
-    const tempSourceAddress = "GBQLX6K3LHY3MXR7G7SCDWS43DQXAQA6NDD2G77XCSYEXYJ7PZPHXNCS";
+    const tempSourceAddress = "GDNS7RJXWL2L2NTZ6TESPH6D4SPT3VAONOUGADO5BIC3QDOEHLJG2FNR";
     const sourceAccount = new StellarSdk.Account(tempSourceAddress, "0");
     
     const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
