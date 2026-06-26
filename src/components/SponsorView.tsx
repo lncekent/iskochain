@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import { Coins, User, Wallet, CheckCircle, ExternalLink, ArrowUpRight, HelpCircle, AlertTriangle } from "lucide-react";
-import { sendUSDC, addUSDCTrustline, fundWithFriendbot, MOCK_ESCROW_ADDRESS, depositContract } from "../stellar";
+import { sendUSDC, addUSDCTrustline, fundWithFriendbot, MOCK_ESCROW_ADDRESS, depositContract, sendXLM } from "../stellar";
 
 interface SponsorViewProps {
   walletAddress: string | null;
-  escrowStatus: "Pending" | "Funded" | "ProofSubmitted" | "Released" | "Refunded";
-  setEscrowStatus: (status: "Pending" | "Funded" | "ProofSubmitted" | "Released" | "Refunded") => void;
+  escrowStatus: "Uninitialized" | "Pending" | "Funded" | "ProofSubmitted" | "Released" | "Refunded";
+  setEscrowStatus: (status: "Uninitialized" | "Pending" | "Funded" | "ProofSubmitted" | "Released" | "Refunded") => void;
   scholarshipAmount: number;
   scholarName: string;
   schoolName: string;
@@ -35,7 +35,8 @@ export default function SponsorView({
   const [isAddingTrustline, setIsAddingTrustline] = useState(false);
   const [isRequestingFaucet, setIsRequestingFaucet] = useState(false);
   const [lastTxHash, setLastTxHash] = useState<string | null>(null);
-  
+  const [isGiftingGas, setIsGiftingGas] = useState(false);
+
   // Specific error triggers for user alerts
   const [trustlineError, setTrustlineError] = useState(false);
   const [insufficientError, setInsufficientError] = useState(false);
@@ -43,17 +44,47 @@ export default function SponsorView({
   const parsedUsdc = parseFloat(usdcBalance) || 0;
   const parsedXlm = parseFloat(xlmBalance) || 0;
 
+  const handleGiftGas = async () => {
+    if (!walletAddress) {
+      addToast("Wallet not connected! Please pair a wallet.", "error");
+      return;
+    }
+    setIsGiftingGas(true);
+    addToast(`Broadcasting native XLM gas transfer to scholar ${scholarName}...`, "info");
+    try {
+      const hash = await sendXLM(walletAddress, studentAddress, 10);
+      setLastTxHash(hash);
+      addToast("🎉 10 XLM successfully transferred to student for transaction fees!", "success");
+      refreshBalances();
+      await syncWithContractState();
+    } catch (err: any) {
+      console.error(err);
+      if (err.message === "USER_DECLINED") {
+        addToast("Gas transfer rejected by user.", "error");
+      } else {
+        addToast(err?.message || "Failed to transfer XLM.", "error");
+      }
+    } finally {
+      setIsGiftingGas(false);
+    }
+  };
+
   const handleAddTrustline = async () => {
     if (!walletAddress) return;
     setIsAddingTrustline(true);
-    addToast("Requesting Freighter signature to append USDC Trustline...", "info");
+    addToast("Requesting wallet signature to append USDC Trustline...", "info");
     try {
       const hash = await addUSDCTrustline(walletAddress);
       addToast("✓ USDC Trustline successfully approved on Stellar!", "success");
       setTrustlineError(false);
       refreshBalances();
     } catch (err: any) {
-      addToast(err?.message || "Failed to add USDC trustline.", "error");
+      console.error(err);
+      if (err.message === "USER_DECLINED") {
+        addToast("Trustline request rejected by user.", "error");
+      } else {
+        addToast(err?.message || "Failed to add USDC trustline.", "error");
+      }
     } finally {
       setIsAddingTrustline(false);
     }
@@ -80,7 +111,7 @@ export default function SponsorView({
 
   const handleFundScholarship = async () => {
     if (!walletAddress) {
-      addToast("Wallet not connected! Please pair Freighter.", "error");
+      addToast("Wallet not connected! Please pair a wallet.", "error");
       return;
     }
 
@@ -100,6 +131,10 @@ export default function SponsorView({
       await syncWithContractState();
     } catch (err: any) {
       console.error(err);
+      if (err.message === "USER_DECLINED") {
+        addToast("Transaction rejected by user.", "error");
+        return;
+      }
       if (err.message === "NO_USDC_TRUSTLINE") {
         setTrustlineError(true);
         addToast("USDC Trustline is missing on this wallet. Complete the trustline setup first.", "error");
@@ -192,7 +227,12 @@ export default function SponsorView({
           </div>
 
           {/* Action buttons */}
-          {escrowStatus === "Pending" ? (
+          {escrowStatus === "Uninitialized" ? (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-4 text-center text-xs font-bold leading-relaxed">
+              ⚠️ This scholarship has not been initialized by QCYDO yet.
+              <p className="font-medium text-[11px] text-slate-500 mt-1">Please wait for the Admin to set up and deploy the escrow parameters before funding.</p>
+            </div>
+          ) : escrowStatus === "Pending" ? (
             <div className="space-y-3">
               <button
                 onClick={handleFundScholarship}
@@ -204,7 +244,7 @@ export default function SponsorView({
 
               {!walletAddress && (
                 <p className="text-xs text-rose-600 font-semibold bg-rose-50 border border-rose-100 p-3 rounded-lg text-center">
-                  ⚠️ Please connect your Freighter Wallet at top right to initiate payment.
+                  ⚠️ Please connect your wallet to initiate payment.
                 </p>
               )}
             </div>
@@ -256,11 +296,30 @@ export default function SponsorView({
               </button>
             </div>
           )}
+
+          <hr className="border-slate-150 my-5" />
+
+          <div className="space-y-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <ArrowUpRight className="h-4 w-4 text-[#1B4FD8]" />
+              Scholar Gas Support (Level 1 Native XLM Transaction)
+            </h4>
+            <p className="text-xs text-slate-500">
+              Scholars need XLM (gas) in their wallet to submit their enrollment proof hashes to the smart contract. Gift some XLM to help them get started.
+            </p>
+            <button
+              onClick={handleGiftGas}
+              disabled={isGiftingGas || !walletAddress || !studentAddress || escrowStatus === "Uninitialized"}
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 px-6 rounded-xl transition-all shadow-sm cursor-pointer text-xs disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isGiftingGas ? "Gifting Gas to Scholar..." : `Gift 10 XLM Gas to ${scholarName}`}
+            </button>
+          </div>
         </div>
 
         {/* Lockup Receipts & Ledger Visual Info */}
         <div className="md:col-span-5 space-y-6">
-          {escrowStatus !== "Pending" && escrowStatus !== "Refunded" ? (
+          {escrowStatus !== "Pending" && escrowStatus !== "Refunded" && escrowStatus !== "Uninitialized" ? (
             <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-6 shadow-sm space-y-4">
               <div className="flex items-center space-x-2 text-[#059669]">
                 <CheckCircle className="h-5 w-5 shrink-0" />
