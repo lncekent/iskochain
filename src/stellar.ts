@@ -1,5 +1,6 @@
 import * as StellarSdk from "@stellar/stellar-sdk";
-import freighterApi from "@stellar/freighter-api";
+import { StellarWalletsKit, Networks } from "@creit.tech/stellar-wallets-kit";
+import { defaultModules } from "@creit.tech/stellar-wallets-kit/modules/utils";
 
 export const NETWORK = "TESTNET";
 export const HORIZON_URL = "https://horizon-testnet.stellar.org";
@@ -15,59 +16,58 @@ export const MOCK_ESCROW_ADDRESS = "GDNS7RJXWL2L2NTZ6TESPH6D4SPT3VAONOUGADO5BIC3
 
 const server = new StellarSdk.Horizon.Server(HORIZON_URL);
 
-// Cast freighterApi module to any to bypass strict type declarations while keeping fully dynamic runtime support
-const api: any = freighterApi;
+// Initialize StellarWalletsKit statically
+StellarWalletsKit.init({
+  network: Networks.TESTNET,
+  modules: defaultModules(),
+});
 
-// helper to safely extract getPublicKey function with double fallback
-const getFreighterPublicKey = async (): Promise<string> => {
-  if (api && typeof api.requestAccess === "function") {
-    try {
-      const res = await api.requestAccess();
-      if (res && res.address) return res.address;
-      if (typeof res === "string") return res;
-    } catch (e) {
-      console.warn("requestAccess failed, trying fallback:", e);
+// Helper function to sign transactions through the kit
+export async function signKitTransaction(xdr: string): Promise<string> {
+  try {
+    const { address } = await StellarWalletsKit.getAddress();
+    const { signedTxXdr } = await StellarWalletsKit.signTransaction(xdr, {
+      networkPassphrase: NETWORK_PASSPHRASE,
+      address,
+    });
+    return signedTxXdr;
+  } catch (err: any) {
+    console.error("Signature failed:", err);
+    const errMsg = String(err?.message || err).toLowerCase();
+    if (errMsg.includes("declined") || errMsg.includes("cancel") || errMsg.includes("reject") || errMsg.includes("user reject")) {
+      throw new Error("USER_DECLINED");
     }
+    if (errMsg.includes("not install") || errMsg.includes("missing")) {
+      throw new Error("WALLET_NOT_INSTALLED");
+    }
+    throw err;
   }
-  if (api && typeof api.getPublicKey === "function") {
-    return await api.getPublicKey();
-  }
-  if (api && typeof api.getAddress === "function") {
-    const res = await api.getAddress();
-    if (res && res.address) return res.address;
-    if (typeof res === "string") return res;
-  }
-  throw new Error("getPublicKey method not found on Freighter API");
-};
+}
 
-// helper to safely extract isConnected function with double fallback
-const checkFreighterConnected = async (): Promise<boolean> => {
-  if (api && typeof api.isConnected === "function") {
-    const res = await api.isConnected();
-    return typeof res === "object" ? !!res.isConnected : !!res;
-  }
-  return false;
-};
-
-// helper to safely extract signTransaction function
-const signFreighterTransaction = async (xdr: string, options: any): Promise<any> => {
-  if (api && typeof api.signTransaction === "function") {
-    return await api.signTransaction(xdr, options);
-  }
-  throw new Error("signTransaction method not found on Freighter API");
-};
-
-// 1. Connect Freighter wallet — returns public key
+// 1. Connect Kit wallet — returns public key
 export async function connectWallet(): Promise<string> {
-  const connected = await checkFreighterConnected();
-  if (!connected) {
-    throw new Error("Freighter wallet not installed");
+  try {
+    const { address } = await StellarWalletsKit.authModal();
+    if (!address) {
+      throw new Error("WALLET_NOT_INSTALLED");
+    }
+    return address;
+  } catch (err: any) {
+    console.error("Wallet connection failed:", err);
+    const errMsg = String(err?.message || err).toLowerCase();
+    if (errMsg.includes("close") || errMsg.includes("cancel") || errMsg.includes("dismiss")) {
+      throw new Error("CONNECTION_DISMISSED");
+    }
+    if (errMsg.includes("not install") || errMsg.includes("missing")) {
+      throw new Error("WALLET_NOT_INSTALLED");
+    }
+    throw err;
   }
-  const publicKey = await getFreighterPublicKey();
-  if (!publicKey) {
-    throw new Error("Freighter wallet locked or access denied");
-  }
-  return publicKey;
+}
+
+// 1.5 Disconnect Kit wallet
+export async function disconnectWallet(): Promise<void> {
+  await StellarWalletsKit.disconnect();
 }
 
 // 2. Get XLM + USDC balance for an address
@@ -132,11 +132,7 @@ export async function sendUSDC(fromKey: string, toKey: string, amount: number): 
       .setTimeout(60)
       .build();
 
-    const resultResponse = await signFreighterTransaction(tx.toXDR(), {
-      networkPassphrase: NETWORK_PASSPHRASE,
-    });
-    const signedTxXdr = resultResponse.signedTxXdr || resultResponse;
-
+    const signedTxXdr = await signKitTransaction(tx.toXDR());
     const txToSubmit = StellarSdk.TransactionBuilder.fromXDR(signedTxXdr, NETWORK_PASSPHRASE);
     const result = await server.submitTransaction(txToSubmit);
     return result.hash;
@@ -182,11 +178,7 @@ export async function sendXLM(fromKey: string, toKey: string, amount: number): P
       .setTimeout(60)
       .build();
 
-    const resultResponse = await signFreighterTransaction(tx.toXDR(), {
-      networkPassphrase: NETWORK_PASSPHRASE,
-    });
-    const signedTxXdr = resultResponse.signedTxXdr || resultResponse;
-
+    const signedTxXdr = await signKitTransaction(tx.toXDR());
     const txToSubmit = StellarSdk.TransactionBuilder.fromXDR(signedTxXdr, NETWORK_PASSPHRASE);
     const result = await server.submitTransaction(txToSubmit);
     return result.hash;
@@ -240,11 +232,7 @@ export async function addUSDCTrustline(publicKey: string): Promise<string> {
       .setTimeout(60)
       .build();
 
-    const resultResponse = await signFreighterTransaction(tx.toXDR(), {
-      networkPassphrase: NETWORK_PASSPHRASE,
-    });
-    const signedTxXdr = resultResponse.signedTxXdr || resultResponse;
-
+    const signedTxXdr = await signKitTransaction(tx.toXDR());
     const txToSubmit = StellarSdk.TransactionBuilder.fromXDR(signedTxXdr, NETWORK_PASSPHRASE);
     const result = await server.submitTransaction(txToSubmit);
     return result.hash;
@@ -345,11 +333,8 @@ export async function invokeContractFunction(
   // Prepare transaction (simulates and adds footprint/resources/fee)
   const preparedTx = await rpcServer.prepareTransaction(tx);
 
-  // Request Freighter signature
-  const signedResult = await signFreighterTransaction(preparedTx.toXDR(), {
-    networkPassphrase: NETWORK_PASSPHRASE,
-  });
-  const signedTxXdr = signedResult.signedTxXdr || signedResult;
+  // Request Kit signature
+  const signedTxXdr = await signKitTransaction(preparedTx.toXDR());
 
   // Submit transaction
   const response = await rpcServer.sendTransaction(
@@ -421,4 +406,47 @@ export async function refundContract(adminAddress: string): Promise<string> {
     StellarSdk.nativeToScVal(adminAddress, { type: "address" }),
   ];
   return await invokeContractFunction(adminAddress, "refund", args);
+}
+
+// 8. Fetch Soroban Events for the contract
+export async function getContractEvents(startLedger?: number): Promise<any[]> {
+  try {
+    let start = startLedger;
+    if (!start) {
+      const latest = await rpcServer.getLatestLedger();
+      start = Math.max(1, latest.sequence - 100);
+    }
+    const response = await rpcServer.getEvents({
+      startLedger: start,
+      filters: [
+        {
+          type: "contract",
+          contractIds: [CONTRACT_ID],
+        }
+      ],
+      limit: 10
+    });
+    return (response.events || []).map((e) => {
+      try {
+        const topics = (e.topic || []).map((t: any) => StellarSdk.scValToNative(t));
+        const value = e.value ? StellarSdk.scValToNative(e.value) : null;
+        return {
+          id: e.id,
+          ledger: e.ledger,
+          topics,
+          value,
+        };
+      } catch (err) {
+        return {
+          id: e.id,
+          ledger: e.ledger,
+          topics: [],
+          value: null,
+        };
+      }
+    });
+  } catch (error) {
+    console.warn("Could not retrieve contract events from RPC:", error);
+    return [];
+  }
 }
