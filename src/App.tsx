@@ -23,7 +23,7 @@ export default function App() {
   const [freighterInstalled, setFreighterInstalled] = useState(true);
 
   // Core Demo States
-  const [escrowStatus, setEscrowStatus] = useState<"Pending" | "Funded" | "ProofSubmitted" | "Released" | "Refunded">("Pending");
+  const [escrowStatus, setEscrowStatus] = useState<"Uninitialized" | "Pending" | "Funded" | "ProofSubmitted" | "Released" | "Refunded">("Uninitialized");
   const [scholarshipAmount, setScholarshipAmount] = useState<number>(175);
   const [studentAddress, setStudentAddress] = useState<string>("GDNS7RJXWL2L2NTZ6TESPH6D4SPT3VAONOUGADO5BIC3QDOEHLJG2FNR");
   const [scholarName, setScholarName] = useState<string>("Maria Santos");
