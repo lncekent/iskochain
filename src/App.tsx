@@ -217,40 +217,6 @@ export default function App() {
           </section>
         )}
 
-        {/* Demo Switch Tabs indicator banner */}
-        <div className="bg-amber-50 border border-amber-200/60 p-4.5 rounded-2xl flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 mb-6">
-          <div className="flex items-center space-x-2 text-xs text-amber-800 font-semibold">
-            <span className="text-base select-none">💡</span>
-            <span><b>Hackathon Demo Guide:</b> Fast-forward views using the tabs to complete the workflow for student <b>Maria Santos</b>.</span>
-          </div>
-          <div className="flex flex-wrap gap-2 shrink-0">
-            <button 
-              onClick={() => setActiveTab("admin")} 
-              className={`px-3.5 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer shadow-xs ${
-                activeTab === "admin" ? "bg-[#1B4FD8] text-white border-[#1B4FD8]" : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-              }`}
-            >
-              1. Admin Panel
-            </button>
-            <button 
-              onClick={() => setActiveTab("sponsor")} 
-              className={`px-3.5 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer shadow-xs ${
-                activeTab === "sponsor" ? "bg-[#1B4FD8] text-white border-[#1B4FD8]" : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-              }`}
-            >
-              2. Sponsor Panel
-            </button>
-            <button 
-              onClick={() => setActiveTab("student")} 
-              className={`px-3.5 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer shadow-xs ${
-                activeTab === "student" ? "bg-[#1B4FD8] text-white border-[#1B4FD8]" : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-              }`}
-            >
-              3. Scholar Panel
-            </button>
-          </div>
-        </div>
-
         {/* ACTIVE MODULE VIEW */}
         <div className="transition-all duration-200" id="main-view-container">
           {activeTab === "admin" && (
