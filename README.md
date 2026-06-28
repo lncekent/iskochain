@@ -33,7 +33,11 @@
 <img width="1321" height="656" alt="image" src="https://github.com/user-attachments/assets/ed3158f4-3f8a-4578-a2aa-e8261843ece6" />
 
 
-> Contract ID: CBPAH3XKSZNFJUP3TSEE7NGDLVXMJFSWSTLU7KFLGDKXYVQDQX42P5H4
+> Contract ID: CBTLVHKWFNFYSUTIFVCWIRH3PJOMMLAZ5N44IU5ZODZ2LBVBY3IXKHQ2
+> Demo Link:  [Click Here](https://iskochain.vercel.app/)
+> Demo Video Link: [Click Here](https://res.cloudinary.com/dxatb3m2q/video/upload/v1782648850/Screen_Recording_2026-06-28_201201_f7wh2g.mp4)
+> TX: [3b9c08502ecee1f7973013932cb6dff837755121cb6ba25ad84a444a210b84ae](https://stellar.expert/explorer/testnet/tx/3b9c08502ecee1f7973013932cb6dff837755121cb6ba25ad84a444a210b84ae)
+> Screenshots: [GDrive](https://drive.google.com/drive/folders/1c762WdIyunkrePaI80lpfx49hFbsXJ_t?usp=drive_link)
 
 
 ## 🔴 The Problem
@@ -426,6 +430,25 @@ https://stellar.expert/explorer/testnet/contract/<CONTRACT_ID>
 | **Frontend** | Hour 3–6 | React app — Admin, Sponsor, Scholar, Transparency views |
 | **Integration** | Hour 6–7 | Stellar SDK wired to contract, Freighter wallet, Horizon live feed |
 | **Deploy & Polish** | Hour 7–8 | Testnet deploy, Vercel hosting, demo run-through |
+
+---
+
+## ⚙️ CI/CD Pipeline & Production Architecture
+
+### 1. Continuous Integration (GitHub Actions)
+The repository is protected by a GitHub Actions workflow defined in [.github/workflows/stellar.yml](file:///.github/workflows/stellar.yml). On every push or pull request to the `main` branch, the runner:
+1. Installs the Rust toolchain with the `wasm32-unknown-unknown` target.
+2. Caches Cargo dependencies to optimize build times.
+3. Runs the Rust unit test suite (`cargo test`) verifying the 5 smart contract scenarios.
+4. Installs Node.js dependencies and runs the TypeScript compiler check (`npm run lint`).
+
+### 2. Multi-Wallet Architecture (`StellarWalletsKit`)
+We integrated `@creit.tech/stellar-wallets-kit` to allow seamless interaction between different roles using diverse wallets (Freighter, Albedo, Hana, xBull, Lobstr). This enables:
+- Seamless switching between government LGU wallets, NGO donor wallets, and student wallets.
+- Robust user-facing error mapping for signature rejections (`USER_DECLINED`), missing extensions (`WALLET_NOT_INSTALLED`), and connection exits.
+
+### 3. Real-Time Event Syncing
+Our Transparency Feed queries the Soroban RPC server's `getEvents` endpoint in real-time, parsing transaction topics and parameters dynamically. Any on-chain event (e.g., `deposit`, `proof`, `release`) is instantly displayed at the top of the feed as a verified ledger transaction, providing a fully transparent audit trail.
 
 ---
 
