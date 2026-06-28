@@ -17,10 +17,41 @@ interface Toast {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<string>("student");
+  const getInitialTab = () => {
+    const hash = window.location.hash.replace("#/", "");
+    const validTabs = ["student", "admin", "sponsor", "transparency"];
+    return validTabs.includes(hash) ? hash : "student";
+  };
+
+  const [activeTab, setActiveTab] = useState<string>(getInitialTab);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [freighterInstalled, setFreighterInstalled] = useState(true);
+
+  // Sync tab state with browser hash changes
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace("#/", "");
+      const validTabs = ["student", "admin", "sponsor", "transparency"];
+      if (validTabs.includes(hash)) {
+        setActiveTab(hash);
+      }
+    };
+    window.addEventListener("hashchange", handleHashChange);
+    
+    // Set default hash if not present
+    if (!window.location.hash) {
+      window.location.hash = "#/student";
+    } else {
+      handleHashChange();
+    }
+    
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  const handleTabChange = (tab: string) => {
+    window.location.hash = `#/${tab}`;
+  };
 
   // Core Demo States
   const [escrowStatus, setEscrowStatus] = useState<"Uninitialized" | "Pending" | "Funded" | "ProofSubmitted" | "Released" | "Refunded">("Uninitialized");
@@ -154,7 +185,7 @@ export default function App() {
         xlmBalance={xlmBalance}
         usdcBalance={usdcBalance}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleTabChange}
         isConnecting={isConnecting}
         freighterInstalled={freighterInstalled}
       />
@@ -207,7 +238,7 @@ export default function App() {
                   Pair Freighter Wallet
                 </button>
                 <button
-                  onClick={() => setActiveTab("transparency")}
+                  onClick={() => handleTabChange("transparency")}
                   className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3.5 px-6 rounded-xl text-xs transition-all cursor-pointer"
                 >
                   View Public Audit Feed 🔍
