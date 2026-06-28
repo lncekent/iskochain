@@ -35,6 +35,7 @@ export default function SponsorView({
   const [isAddingTrustline, setIsAddingTrustline] = useState(false);
   const [isRequestingFaucet, setIsRequestingFaucet] = useState(false);
   const [lastTxHash, setLastTxHash] = useState<string | null>(null);
+  const [lastGiftTxHash, setLastGiftTxHash] = useState<string | null>(null);
   const [isGiftingGas, setIsGiftingGas] = useState(false);
 
   // Specific error triggers for user alerts
@@ -53,7 +54,7 @@ export default function SponsorView({
     addToast(`Broadcasting native XLM gas transfer to scholar ${scholarName}...`, "info");
     try {
       const hash = await sendXLM(walletAddress, studentAddress, 10);
-      setLastTxHash(hash);
+      setLastGiftTxHash(hash);
       addToast("🎉 10 XLM successfully transferred to student for transaction fees!", "success");
       refreshBalances();
       await syncWithContractState();
@@ -314,6 +315,27 @@ export default function SponsorView({
             >
               {isGiftingGas ? "Gifting Gas to Scholar..." : `Gift 10 XLM Gas to ${scholarName}`}
             </button>
+
+            {lastGiftTxHash && (
+              <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl space-y-2 mt-3 animate-fade-in-up">
+                <div className="flex items-center space-x-2 text-[#059669]">
+                  <CheckCircle className="h-4 w-4 shrink-0" />
+                  <span className="font-bold text-xs">Gas Gift Verified ✓</span>
+                </div>
+                <div className="flex justify-between items-center text-[11px] text-slate-700">
+                  <span className="font-mono bg-white/60 px-2 py-1 rounded-md border border-emerald-100">{lastGiftTxHash.slice(0, 16)}...</span>
+                  <a
+                    href={`https://stellar.expert/explorer/testnet/tx/${lastGiftTxHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#1B4FD8] hover:text-blue-700 font-bold flex items-center space-x-1"
+                  >
+                    <span>Verify Receipt</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
